@@ -33,6 +33,10 @@ public class MedilaboGatewayApplication {
                         .path("/api/history/**")
                         .filters(f -> f.stripPrefix(2))
                         .uri("http://localhost:8083"))
+                //Diabetes Service (Backend on port 8084)
+                .route("diabetes-service", r -> r
+                        .path("/api/diabetes/**")
+                        .uri("http://localhost:8084"))
                 //Frontend UI (Thymeleaf app on port 8082)
                 .route("frontend-ui", r -> r
                         .path("/ui/**")
