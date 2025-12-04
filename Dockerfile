@@ -1,5 +1,5 @@
 # Use a base image with Java 17 already installed
-FROM eclipse-temurin:17-jdk-alpine
+FROM eclipse-temurin:21-jdk-alpine
 # Expose the port your app runs on
 EXPOSE 8085
 # Set working directory inside the container
