@@ -26,12 +26,12 @@ public class MedilaboGatewayApplication {
                 // Patient Service (Backend on port 8081)
                 .route("patient-service", r -> r
                         .path("/api/patient/**")
-                        .filters(f -> f.stripPrefix(2))
+                        //.filters(f -> f.stripPrefix(1))
                         .uri("http://localhost:8081"))
                 //History Service (Backend on port 8083)
                 .route("history-service", r -> r
                         .path("/api/history/**")
-                        .filters(f -> f.stripPrefix(2))
+                        //.filters(f -> f.stripPrefix(2))
                         .uri("http://localhost:8083"))
                 //Diabetes Service (Backend on port 8084)
                 .route("diabetes-service", r -> r
@@ -41,6 +41,7 @@ public class MedilaboGatewayApplication {
                 .route("frontend-ui", r -> r
                         .path("/ui/**")
                         .uri("http://localhost:8082"))
+
                 .build();
 
     }
