@@ -1,13 +1,13 @@
-//package com.abernathyclinic.medilabo_gateway.controller;
-//
-//import org.springframework.stereotype.Controller;
-//import org.springframework.web.bind.annotation.GetMapping;
-//
-//@Controller
-//public class LoginController {
-//
-//    @GetMapping("/login")
-//    public String login() {
-//        return "login";
-//    }
-//}
+package com.abernathyclinic.medilabo_gateway.controller;
+
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.GetMapping;
+
+@Controller
+public class LoginController {
+
+    @GetMapping({"/", "/login","/ui/add"})
+    public String login() {
+        return "login";
+    }
+}
