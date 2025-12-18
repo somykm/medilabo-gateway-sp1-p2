@@ -1,20 +1,31 @@
 package com.abernathyclinic.medilabo_gateway.security;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.core.userdetails.*;
+
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetails;
 
 @Configuration
 public class SpringSecurityConfig {
 
-    private final JwtService jwtService = new JwtService();
+    private static final String JWT_COOKIE = "AUTH_TOKEN";
+    private final JwtService jwtService;
+
+    @Autowired
+    public SpringSecurityConfig(JwtService jwtService) {
+        this.jwtService = jwtService;
+    }
 
     @Bean
     public InMemoryUserDetailsManager userDetailsService() {
@@ -33,17 +44,14 @@ public class SpringSecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
                                                    JwtCookieAuthFilter jwtCookieAuthFilter) throws Exception {
         http
-                .csrf(csrf -> csrf.ignoringRequestMatchers("/login"))
+                .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/", "/login", "/css/**", "/js/**").permitAll()
                         .requestMatchers("/ui/**").authenticated()
-                        //.requestMatchers("/api/**").authenticated()
-                        .requestMatchers("/api/add**").permitAll()
-
+                        .requestMatchers("/api/**").authenticated()
                         .anyRequest().permitAll()
                 )
                 .formLogin(form -> form
-                        .loginPage("/login")
                         .loginProcessingUrl("/login")
                         .successHandler(authenticationSuccessHandler())
                         .failureUrl("/login?error")
@@ -54,7 +62,7 @@ public class SpringSecurityConfig {
                         .logoutSuccessUrl("/login?logout")
                         .permitAll()
                 )
-                .addFilterBefore(jwtCookieAuthFilter, org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtCookieAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
@@ -62,17 +70,16 @@ public class SpringSecurityConfig {
     @Bean
     public AuthenticationSuccessHandler authenticationSuccessHandler() {
         return (request, response, authentication) -> {
-            var principal = (UserDetails) authentication.getPrincipal();
+            var principal = (org.springframework.security.core.userdetails.UserDetails) authentication.getPrincipal();
             var roles = principal.getAuthorities().stream()
                     .map(a -> a.getAuthority().replace("ROLE_", ""))
                     .toList();
             String token = jwtService.createToken(principal.getUsername(), roles);
             setJwtCookie(response, token);
-            response.sendRedirect("/ui/add");
+            // Redirect to frontend service instead of gateway
+            response.sendRedirect("http://localhost:8082/ui/add");
         };
     }
-
-    private static final String JWT_COOKIE = "AUTH_TOKEN";
 
     private void setJwtCookie(HttpServletResponse response, String jwt) {
         Cookie cookie = new Cookie(JWT_COOKIE, jwt);

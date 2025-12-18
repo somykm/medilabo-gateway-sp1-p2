@@ -3,6 +3,9 @@ package com.abernathyclinic.medilabo_gateway.security;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.JwtException;
+
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -17,12 +20,16 @@ import jakarta.servlet.http.HttpServletResponse;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.ArrayList;
 
+@Slf4j
 @Component
 public class JwtCookieAuthFilter extends OncePerRequestFilter {
 
+    private static final String JWT_COOKIE = "AUTH_TOKEN";
     private final JwtService jwtService;
 
+    @Autowired
     public JwtCookieAuthFilter(JwtService jwtService) {
         this.jwtService = jwtService;
     }
@@ -37,9 +44,16 @@ public class JwtCookieAuthFilter extends OncePerRequestFilter {
         if (token != null) {
             try {
                 Jws<Claims> jws = jwtService.parse(token);
+
                 String username = jws.getBody().getSubject();
-                @SuppressWarnings("unchecked")
-                List<String> roles = (List<String>) jws.getBody().get("roles");
+                Object rolesClaim = jws.getBody().get("roles");
+
+                List<String> roles = new ArrayList<>();
+                if (rolesClaim instanceof List<?>) {
+                    for (Object r : (List<?>) rolesClaim) {
+                        roles.add(String.valueOf(r));
+                    }
+                }
 
                 var authorities = roles.stream()
                         .map(r -> new SimpleGrantedAuthority("ROLE_" + r))
@@ -47,15 +61,19 @@ public class JwtCookieAuthFilter extends OncePerRequestFilter {
 
                 var auth = new UsernamePasswordAuthenticationToken(username, null, authorities);
                 SecurityContextHolder.getContext().setAuthentication(auth);
+                request.setAttribute("Authorization", "Bearer " + token);
+
+                log.info("JWT parsed successfully for user: {} with roles: {}", username, roles);
+
             } catch (JwtException e) {
+                log.warn("JWT parsing failed: {}", e.getMessage());
                 clearJwtCookie(response);
+                SecurityContextHolder.clearContext();
             }
         }
-        //do nothing, let Spring Security use JSESSIONID
+
         chain.doFilter(request, response);
     }
-
-    private static final String JWT_COOKIE = "AUTH_TOKEN";
 
     private String readJwtFromCookie(HttpServletRequest request) {
         if (request.getCookies() == null) return null;
@@ -71,6 +89,8 @@ public class JwtCookieAuthFilter extends OncePerRequestFilter {
         Cookie cookie = new Cookie(JWT_COOKIE, "");
         cookie.setPath("/");
         cookie.setMaxAge(0);
+        cookie.setHttpOnly(true);
+        cookie.setSecure(false);
         response.addCookie(cookie);
     }
 }
