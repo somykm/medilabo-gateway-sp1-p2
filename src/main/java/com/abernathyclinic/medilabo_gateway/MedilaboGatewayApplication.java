@@ -12,7 +12,6 @@ public class MedilaboGatewayApplication {
 
         SpringApplication.run(MedilaboGatewayApplication.class, args);
     }
-
     @Bean
     public RestTemplate restTemplate() {
         return new RestTemplate();

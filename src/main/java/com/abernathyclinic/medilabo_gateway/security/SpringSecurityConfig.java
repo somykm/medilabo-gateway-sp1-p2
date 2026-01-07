@@ -1,92 +1,102 @@
 package com.abernathyclinic.medilabo_gateway.security;
 
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-
-import org.springframework.security.provisioning.InMemoryUserDetailsManager;
-import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
-
-import jakarta.servlet.http.Cookie;
-import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-
+import org.springframework.http.HttpStatus;
+import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
+import org.springframework.security.core.userdetails.MapReactiveUserDetailsService;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.web.server.SecurityWebFilterChain;
+import org.springframework.security.web.server.authentication.ServerAuthenticationSuccessHandler;
+import org.springframework.security.config.web.server.ServerHttpSecurity;
+import org.springframework.web.server.ServerWebExchange;
+import org.springframework.http.ResponseCookie;
+
+import java.net.URI;
+import java.time.Duration;
+import java.util.List;
 
 @Configuration
+@EnableWebFluxSecurity
+@RequiredArgsConstructor
 public class SpringSecurityConfig {
-
     private static final String JWT_COOKIE = "AUTH_TOKEN";
     private final JwtService jwtService;
 
-    @Autowired
-    public SpringSecurityConfig(JwtService jwtService) {
-        this.jwtService = jwtService;
-    }
-
     @Bean
-    public InMemoryUserDetailsManager userDetailsService() {
+    public MapReactiveUserDetailsService userDetailsService() {
         UserDetails admin = User.withUsername("admin")
                 .password("{noop}secret")
-                .roles("ADMIN").build();
+                .roles("ADMIN")
+                .build();
 
         UserDetails doctor = User.withUsername("doctor")
                 .password("{noop}doctor123")
-                .roles("DOCTOR").build();
+                .roles("DOCTOR")
+                .build();
 
-        return new InMemoryUserDetailsManager(admin, doctor);
+        return new MapReactiveUserDetailsService(admin, doctor);
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http,
-                                                   JwtCookieAuthFilter jwtCookieAuthFilter) throws Exception {
-        http
-                .csrf(csrf -> csrf.disable())
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/", "/login", "/css/**", "/js/**").permitAll()
-                        .requestMatchers("/ui/**").authenticated()
-                        .requestMatchers("/api/**").authenticated()
-                        .anyRequest().permitAll()
+    public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
+
+        return http
+                .csrf(ServerHttpSecurity.CsrfSpec::disable)
+                .authorizeExchange(auth -> auth
+                        .pathMatchers("/", "/login", "/css/**", "/js/**").permitAll()
+                        .pathMatchers("/ui/**").authenticated()
+                        .pathMatchers("/api/**").authenticated()
+                        .anyExchange().permitAll()
                 )
                 .formLogin(form -> form
-                        .loginProcessingUrl("/login")
-                        .successHandler(authenticationSuccessHandler())
-                        .failureUrl("/login?error")
-                        .permitAll()
+                        .authenticationSuccessHandler(jwtCookieSuccessHandler())
                 )
                 .logout(logout -> logout
                         .logoutUrl("/logout")
-                        .logoutSuccessUrl("/login?logout")
-                        .permitAll()
+                        .logoutSuccessHandler((exchange, authentication) -> {
+                            ResponseCookie delete = ResponseCookie.from(JWT_COOKIE, "")
+                                    .path("/")
+                                    .maxAge(Duration.ZERO)
+                                    .httpOnly(true)
+                                    .build();
+                            exchange.getExchange().getResponse().addCookie(delete);
+                            exchange.getExchange().getResponse()
+                                    .setStatusCode(HttpStatus.SEE_OTHER);
+                            exchange.getExchange().getResponse()
+                                    .getHeaders().setLocation(URI.create("/login?logout"));
+                            return exchange.getExchange().getResponse().setComplete();
+                        })
                 )
-                .addFilterBefore(jwtCookieAuthFilter, UsernamePasswordAuthenticationFilter.class);
-
-        return http.build();
+                .build();
     }
 
-    @Bean
-    public AuthenticationSuccessHandler authenticationSuccessHandler() {
-        return (request, response, authentication) -> {
-            var principal = (org.springframework.security.core.userdetails.UserDetails) authentication.getPrincipal();
-            var roles = principal.getAuthorities().stream()
+    private ServerAuthenticationSuccessHandler jwtCookieSuccessHandler() {
+        return (webFilterExchange, authentication) -> {
+            ServerWebExchange exchange = webFilterExchange.getExchange();
+
+            String username = authentication.getName();
+            List<String> roles = authentication.getAuthorities().stream()
                     .map(a -> a.getAuthority().replace("ROLE_", ""))
                     .toList();
-            String token = jwtService.createToken(principal.getUsername(), roles);
-            setJwtCookie(response, token);
-            // Redirect to frontend service instead of gateway
-            response.sendRedirect("http://localhost:8082/ui/add");
-        };
-    }
 
-    private void setJwtCookie(HttpServletResponse response, String jwt) {
-        Cookie cookie = new Cookie(JWT_COOKIE, jwt);
-        cookie.setHttpOnly(true);
-        cookie.setSecure(false);
-        cookie.setPath("/");
-        cookie.setMaxAge(3600);
-        response.addCookie(cookie);
+            String token = jwtService.createToken(username, roles);
+
+            ResponseCookie cookie = ResponseCookie.from(JWT_COOKIE, token)
+                    .httpOnly(true)
+                    .secure(false)
+                    .sameSite("Lax")
+                    .path("/")
+                    .maxAge(Duration.ofHours(1))
+                    .build();
+
+            exchange.getResponse().addCookie(cookie);
+            exchange.getResponse().setStatusCode(HttpStatus.SEE_OTHER);
+            exchange.getResponse().getHeaders().setLocation(URI.create("/ui/store-token"));
+
+            return exchange.getResponse().setComplete();
+        };
     }
 }

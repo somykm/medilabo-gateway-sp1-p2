@@ -6,9 +6,9 @@ import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
+import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
@@ -18,18 +18,18 @@ import java.util.List;
 
 @Service
 public class JwtService {
-
     private final Key key;
     private final long expirationSeconds;
 
     @Autowired
-    public JwtService(@Value("${jwt.secret}") String secret,
-                      @Value("${jwt.expiration}") long expirationSeconds) {
+    public JwtService(
+            @Value("${jwt.secret}") String secret,
+            @Value("${jwt.expiration}") long expirationSeconds
+    ) {
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.expirationSeconds = expirationSeconds;
     }
 
-    //Create a JWT token with username + roles
     public String createToken(String username, List<String> roles) {
         Instant now = Instant.now();
         return Jwts.builder()
@@ -41,7 +41,6 @@ public class JwtService {
                 .compact();
     }
 
-    //Parse and validate a JWT token
     public Jws<Claims> parse(String token) throws JwtException {
         return Jwts.parserBuilder()
                 .setSigningKey(key)
