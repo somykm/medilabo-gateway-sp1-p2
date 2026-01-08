@@ -7,11 +7,11 @@ import org.springframework.web.client.RestTemplate;
 
 @SpringBootApplication
 public class MedilaboGatewayApplication {
-
     public static void main(String[] args) {
 
         SpringApplication.run(MedilaboGatewayApplication.class, args);
     }
+
     @Bean
     public RestTemplate restTemplate() {
         return new RestTemplate();
